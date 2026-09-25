@@ -40,8 +40,8 @@ export function About({ sectionRef }) {
           className="relative overflow-hidden rounded-2xl"
         >
           <img
-            src="/brand/selfie-zone.png"
-            alt="Interior de Cuspian Studio con iluminación naranja y zona de espejos"
+            src="/gallery/about-hero.jpg"
+            alt="Alumna entrenando en Cuspian Studio frente al logo iluminado del estudio"
             className="aspect-[4/5] w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-ink/75 via-transparent to-transparent" />

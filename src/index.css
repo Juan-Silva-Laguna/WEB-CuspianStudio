@@ -90,11 +90,7 @@ html.lenis body {
 }
 
 .testimonial-viewport {
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  outline: none;
+  overflow: hidden;
   mask-image: linear-gradient(
     to right,
     transparent,
@@ -104,8 +100,55 @@ html.lenis body {
   );
 }
 
-.testimonial-viewport::-webkit-scrollbar {
-  display: none;
+.testimonial-marquee {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: testimonial-marquee var(--testimonial-duration) linear infinite;
+}
+
+.testimonial-marquee--reverse {
+  animation-name: testimonial-marquee-reverse;
+}
+
+.testimonial-group {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1.25rem;
+  padding-inline-end: 1.25rem;
+}
+
+@keyframes testimonial-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes testimonial-marquee-reverse {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (min-width: 768px) {
+  .testimonial-group {
+    gap: 1.5rem;
+    padding-inline-end: 1.5rem;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .testimonial-viewport:hover .testimonial-marquee {
+    animation-play-state: paused;
+  }
 }
 
 /* Fixed grain layer, applied only to a static overlay, never to scrolling containers */
@@ -127,5 +170,20 @@ html.lenis body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Keep social proof legible but alive: a slower, constant compositor
+     glide is gentler than disabling the marquee or snapping between cards. */
+  .testimonial-marquee {
+    animation-name: testimonial-marquee !important;
+    animation-duration: 96s !important;
+    animation-timing-function: linear !important;
+    animation-iteration-count: infinite !important;
+    animation-play-state: running !important;
+  }
+
+  .testimonial-marquee--reverse {
+    animation-name: testimonial-marquee-reverse !important;
+    animation-duration: 108s !important;
   }
 }

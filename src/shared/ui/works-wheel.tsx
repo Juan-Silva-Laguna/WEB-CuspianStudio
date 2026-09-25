@@ -245,13 +245,6 @@ export function WorksWheel({
     const wrapper = wrapperRef.current;
     if (!wrapper) return undefined;
 
-    if (reduced) {
-      // Under prefers-reduced-motion the tall wrapper is collapsed back to
-      // a single viewport (see the inline `height` style below), so there
-      // is no extra scroll range for a ScrollTrigger to scrub through.
-      return undefined;
-    }
-
     const trigger = ScrollTrigger.create({
       trigger: wrapper,
       start: "top top",
@@ -274,50 +267,56 @@ export function WorksWheel({
     });
 
     return () => trigger.kill();
-  }, [last, reduced]);
+  }, [last]);
 
   return (
     <section
       ref={wrapperRef}
       aria-label={label}
-      className={cn("relative w-full min-h-[34rem]", className)}
+      className={cn(
+        "relative w-full min-h-[34rem] bg-ink",
+        className,
+      )}
       style={{
         // Extra scroll runway proportional to the item count: scrolling
         // through this whole height is what drives the wheel from its
-        // first card to its last (see the ScrollTrigger above). Collapsed
-        // back to a single viewport under reduced motion, since there's no
-        // scrubbed animation left to justify the extra scroll distance.
-        height: reduced
-          ? "100dvh"
-          : `calc(100dvh + ${(last + 1) * SCROLL_VH_PER_ITEM}vh)`,
+        // first card to its last (see the ScrollTrigger above). The runway
+        // remains identical when iOS reports reduced motion: the wheel then
+        // follows the scroll without interpolation, rather than becoming a
+        // disconnected one-screen carousel.
+        height: `calc(100svh + ${(last + 1) * SCROLL_VH_PER_ITEM}svh)`,
       }}
       {...props}
     >
-      <div className="sticky top-0 h-dvh min-h-[34rem] w-full select-none overflow-hidden bg-2 text-bone">
+      <div className="sticky top-0 h-svh min-h-[34rem] w-full select-none overflow-hidden bg-ink text-bone">
         <div
           ref={stageRef}
           tabIndex={0}
           role="listbox"
           aria-label={label}
           aria-activedescendant={`works-wheel-${active}`}
-          className="absolute inset-0 cursor-grab touch-pan-x outline-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ember active:cursor-grabbing"
+          className="absolute inset-0 cursor-grab touch-pan-y outline-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ember active:cursor-grabbing"
           style={{ perspective: `${metrics.depth}px` }}
           onPointerDown={(event) => {
+            if (event.pointerType === "touch") return;
             drag.current = event.clientY;
             event.currentTarget.setPointerCapture(event.pointerId);
           }}
           onPointerMove={(event) => {
+            if (event.pointerType === "touch") return;
             if (drag.current === null) return;
             moveTo(
               target.current + (drag.current - event.clientY) / DRAG_UNITS,
             );
             drag.current = event.clientY;
           }}
-          onPointerUp={() => {
+          onPointerUp={(event) => {
+            if (event.pointerType === "touch") return;
             drag.current = null;
             if (target.current > 1) moveTo(Math.round(target.current));
           }}
-          onPointerCancel={() => {
+          onPointerCancel={(event) => {
+            if (event.pointerType === "touch") return;
             drag.current = null;
           }}
           onKeyDown={(event) => {
@@ -412,7 +411,10 @@ export function WorksWheel({
         </ol>
 
         <p className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 text-center text-xs text-smoke md:bottom-8">
-          Gira, arrastra o usa las flechas
+          <span className="md:hidden">Desliza para recorrer</span>
+          <span className="hidden md:inline">
+            Gira, arrastra o usa las flechas
+          </span>
         </p>
       </div>
     </section>

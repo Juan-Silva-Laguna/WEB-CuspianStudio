@@ -6,12 +6,12 @@ const IMAGE = (id) =>
 const DISCIPLINES = [
   {
     title: "Jumping fitness",
-    image: IMAGE("photo-1518611012118-696072aa579a"),
+    image: "/gallery/jumping-fitness.jpg",
     href: "#membresias",
   },
   {
     title: "Dance fitness",
-    image: IMAGE("photo-1504609813442-a8924e83f76e"),
+    image: "/gallery/dance-fitness.jpg",
     href: "#membresias",
   },
   {
@@ -46,7 +46,7 @@ const DISCIPLINES = [
   },
   {
     title: "Master class",
-    image: IMAGE("photo-1524594152303-9fd13543fe6e"),
+    image: "/gallery/master-class.jpg",
     href: "#eventos",
   },
   {

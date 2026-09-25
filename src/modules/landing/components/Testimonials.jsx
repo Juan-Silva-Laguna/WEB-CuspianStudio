@@ -1,35 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Quotes, Star } from "@phosphor-icons/react";
-import gsap from "gsap";
-
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
-function subscribeToReducedMotion(callback) {
-  if (typeof window === "undefined") return () => {};
-
-  const mediaQueryList = window.matchMedia(REDUCED_MOTION_QUERY);
-  mediaQueryList.addEventListener("change", callback);
-
-  return () => mediaQueryList.removeEventListener("change", callback);
-}
-
-function getReducedMotionSnapshot() {
-  if (typeof window === "undefined") return false;
-
-  return window.matchMedia?.(REDUCED_MOTION_QUERY)?.matches ?? false;
-}
-
-function getServerReducedMotionSnapshot() {
-  return false;
-}
-
-function usePrefersReducedMotion() {
-  return useSyncExternalStore(
-    subscribeToReducedMotion,
-    getReducedMotionSnapshot,
-    getServerReducedMotionSnapshot,
-  );
-}
 
 const TESTIMONIALS_TOP = [
   {
@@ -159,144 +128,35 @@ function TestimonialCard({ testimonial }) {
   );
 }
 
-// A row of testimonial cards that autoplay-glides back and forth between
-// its two scroll edges (GSAP tween on the container's real `scrollLeft`,
-// manually re-triggered on each bounce so it can reverse direction the
-// instant it reaches either end). Because the animation drives genuine
-// `scrollLeft` on an `overflow-x: auto` element -- rather than a CSS
-// transform on a clipped track -- the row stays natively scrollable at all
-// times: a visitor can drag, swipe or use the trackpad to jump straight
-// from the first testimonial to the last without waiting for the autoplay.
-// User interaction pauses the autoplay tween; it resumes, from wherever the
-// user left it, after a short idle period. `reverse` flips the starting
-// edge so the top and bottom rows travel in opposite directions.
-function BounceRow({ items, keyPrefix, reverse = false, speed = 55 }) {
-  const viewportRef = useRef(null);
-  const tweenRef = useRef(null);
-  const resumeTimeoutRef = useRef(null);
-  const directionRef = useRef(reverse ? -1 : 1);
-  const interactingRef = useRef(false);
-  const reducedMotion = usePrefersReducedMotion();
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return undefined;
-
-    if (reducedMotion) {
-      viewport.scrollTo({ left: 0, behavior: "auto" });
-      return undefined;
-    }
-
-    const RESUME_DELAY = 1500;
-    const maxScroll = () =>
-      Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-
-    // Animates a plain proxy object rather than tweening `scrollLeft`
-    // directly, then applies each frame through `viewport.scrollTo(...)`.
-    // Some mobile WebKit builds isolate a scrollable element into a
-    // touch-only compositor layer and silently ignore direct `scrollLeft`
-    // writes from JS until the user physically touches the element (the
-    // value updates internally but nothing repaints) -- `scrollTo()` is the
-    // documented, reliable way to make programmatic scrolling actually
-    // repaint on those engines, so autoplay behaves the same on a real
-    // phone as it does on desktop.
-    const playFrom = (from, dir) => {
-      tweenRef.current?.kill();
-      if (interactingRef.current) return;
-
-      const max = maxScroll();
-      if (max <= 0) return;
-
-      const to = dir === 1 ? max : 0;
-      const distance = Math.abs(to - from);
-      if (distance < 1) {
-        directionRef.current = -dir;
-        playFrom(from, -dir);
-        return;
-      }
-
-      const proxy = { x: from };
-      tweenRef.current = gsap.to(proxy, {
-        x: to,
-        duration: distance / speed,
-        ease: "sine.inOut",
-        onUpdate: () => {
-          viewport.scrollTo({ left: proxy.x, behavior: "auto" });
-        },
-        onComplete: () => {
-          directionRef.current *= -1;
-          playFrom(to, directionRef.current);
-        },
-      });
-    };
-
-    const start = () => {
-      if (interactingRef.current) return;
-      tweenRef.current?.kill();
-      const max = maxScroll();
-      const initial = reverse ? max : 0;
-      viewport.scrollTo({ left: initial, behavior: "auto" });
-      directionRef.current = reverse ? -1 : 1;
-      playFrom(initial, directionRef.current);
-    };
-
-    start();
-
-    const resizeObserver = new ResizeObserver(() => start());
-    resizeObserver.observe(viewport);
-
-    const scheduleResume = () => {
-      clearTimeout(resumeTimeoutRef.current);
-      resumeTimeoutRef.current = setTimeout(() => {
-        interactingRef.current = false;
-        const current = viewport.scrollLeft;
-        const max = maxScroll();
-        const dir =
-          current >= max - 1 ? -1 : current <= 1 ? 1 : directionRef.current;
-        directionRef.current = dir;
-        playFrom(current, dir);
-      }, RESUME_DELAY);
-    };
-
-    const handleInteractionStart = () => {
-      interactingRef.current = true;
-      tweenRef.current?.kill();
-      scheduleResume();
-    };
-
-    const handleScroll = () => {
-      if (interactingRef.current) scheduleResume();
-    };
-
-    viewport.addEventListener("pointerdown", handleInteractionStart);
-    viewport.addEventListener("wheel", handleInteractionStart, {
-      passive: true,
-    });
-    viewport.addEventListener("touchstart", handleInteractionStart, {
-      passive: true,
-    });
-    viewport.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      resizeObserver.disconnect();
-      tweenRef.current?.kill();
-      clearTimeout(resumeTimeoutRef.current);
-      viewport.removeEventListener("pointerdown", handleInteractionStart);
-      viewport.removeEventListener("wheel", handleInteractionStart);
-      viewport.removeEventListener("touchstart", handleInteractionStart);
-      viewport.removeEventListener("scroll", handleScroll);
-    };
-  }, [reducedMotion, reverse, speed, items]);
-
+function TestimonialGroup({ items, keyPrefix, duplicate = false }) {
   return (
-    <div ref={viewportRef} className="testimonial-viewport" tabIndex={0}>
-      <div className="flex w-max gap-5 md:gap-6">
-        {items.map((testimonial) => (
-          <TestimonialCard
-            key={`${keyPrefix}-${testimonial.name}`}
-            testimonial={testimonial}
-          />
-        ))}
+    <div
+      className="testimonial-group"
+      aria-hidden={duplicate ? "true" : undefined}
+    >
+      {items.map((testimonial) => (
+        <TestimonialCard
+          key={`${keyPrefix}-${duplicate ? "copy-" : ""}${testimonial.name}`}
+          testimonial={testimonial}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MarqueeRow({ items, keyPrefix, reverse = false, duration = 64 }) {
+  return (
+    <div className="testimonial-viewport">
+      <div
+        className={`testimonial-marquee${reverse ? " testimonial-marquee--reverse" : ""}`}
+        style={{ "--testimonial-duration": `${duration}s` }}
+      >
+        <TestimonialGroup items={items} keyPrefix={keyPrefix} />
+        <TestimonialGroup
+          items={items}
+          keyPrefix={keyPrefix}
+          duplicate
+        />
       </div>
     </div>
   );
@@ -320,12 +180,12 @@ export function Testimonials() {
       </div>
 
       <div className="mt-14 space-y-5 md:space-y-6">
-        <BounceRow items={TESTIMONIALS_TOP} keyPrefix="top" speed={55} />
-        <BounceRow
+        <MarqueeRow items={TESTIMONIALS_TOP} keyPrefix="top" duration={64} />
+        <MarqueeRow
           items={TESTIMONIALS_BOTTOM}
           keyPrefix="bottom"
           reverse
-          speed={48}
+          duration={72}
         />
       </div>
     </section>

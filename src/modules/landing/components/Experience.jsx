@@ -37,9 +37,9 @@ export function Experience({ sectionRef }) {
             className="group relative col-span-1 row-span-2 aspect-[4/5] overflow-hidden rounded-2xl md:col-span-2 md:aspect-auto"
           >
             <img
-              src="/brand/selfie-zone.png"
-              alt="Zona selfie con espejo iluminado y aro de luz en Cuspian Studio"
-              className="absolute inset-0 h-full w-full object-cover object-[35%_45%] transition-transform duration-700 ease-out group-hover:scale-105"
+              src="/gallery/selfie-zone-real.jpg"
+              alt="Salto en minitrampolín reflejado en los espejos de piso a techo de Cuspian Studio"
+              className="absolute inset-0 h-full w-full object-cover object-[50%_30%] transition-transform duration-700 ease-out group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/10 to-transparent" />
             <figcaption className="absolute inset-x-0 bottom-0 p-6">
@@ -60,8 +60,8 @@ export function Experience({ sectionRef }) {
             className="relative col-span-1 row-span-1 aspect-square overflow-hidden rounded-2xl bg-surface"
           >
             <img
-              src="/brand/brand-sheet.png"
-              alt="Sistema de marca Cuspian Studio: logo, iconografia y recepcion"
+              src="/gallery/brand-identity.jpg"
+              alt="Instructor frente al mural de la marca Cuspian Studio en el estudio"
               className="absolute inset-0 h-full w-full object-cover object-top"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-transparent to-transparent" />

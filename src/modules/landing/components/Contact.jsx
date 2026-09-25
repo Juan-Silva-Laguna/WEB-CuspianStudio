@@ -96,7 +96,7 @@ export function Contact() {
             <iframe
               title="Ubicación de Cuspian Studio"
               src="https://www.google.com/maps?q=Calle%2020%20%2336A-12%2C%20Neiva%2C%20Huila%2C%20Colombia&output=embed"
-              className="h-[420px] w-full border-0 grayscale contrast-125 md:h-[560px]"
+              className="h-[420px] w-full border-0 md:h-[560px]"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />

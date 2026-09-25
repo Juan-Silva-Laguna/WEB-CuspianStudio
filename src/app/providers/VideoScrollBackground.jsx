@@ -17,6 +17,11 @@ const VIDEO_SRC = "/video/jumping-all-intra.mp4";
 
 const VideoScrollContext = createContext(null);
 
+const needsMobileDecoderPump = () =>
+  typeof window !== "undefined" &&
+  (window.matchMedia("(pointer: coarse)").matches ||
+    window.navigator.maxTouchPoints > 0);
+
 /**
  * Mounts a single fixed, full-bleed <video> layer behind the entire page and
  * shares it (plus a "ready" flag once its metadata has loaded) through
@@ -36,25 +41,43 @@ export function VideoScrollProvider({ children }) {
     const video = videoRef.current;
     if (!video) return undefined;
 
+    // Belt-and-suspenders for mobile Safari/Chrome: these are already set
+    // as JSX attributes below, but some mobile browsers only honor them
+    // reliably when also assigned directly on the DOM node before the
+    // first `load()`/play attempt.
+    video.defaultMuted = true;
+    video.muted = true;
+    video.playsInline = true;
+
     // No poster image is used (nothing in the brand kit matches the video's
     // actual first frame, and showing a mismatched poster is exactly the
     // "otra imagen" flash the user is trying to get rid of). Instead, as
-    // soon as the video has enough data to render a frame, we explicitly
-    // seek to 0 so the very first paint is the video's own opening frame --
-    // matching where the hero's scrub phase starts -- rather than whatever
-    // frame the browser happens to decode first.
+    // soon as the video's metadata is available we explicitly seek to 0 so
+    // the very first paint is the video's own opening frame -- matching
+    // where the hero's scrub phase starts -- rather than whatever frame
+    // the browser happens to decode first.
     const markReady = () => {
       video.currentTime = 0;
+      video.pause();
       setReady(true);
     };
 
-    if (video.readyState >= 2) {
+    // Gate on "loadedmetadata" (readyState >= 1: duration/dimensions known)
+    // rather than "loadeddata" (readyState >= 2: a full frame decoded).
+    // Mobile carriers/browsers routinely downgrade `preload="auto"` to
+    // metadata-only to save data, so waiting for a fully decoded frame
+    // before arming the scroll-scrub could stall indefinitely and leave
+    // the whole journey (and the layer behind it) black forever.
+    if (video.readyState >= 1) {
       markReady();
       return undefined;
     }
 
-    video.addEventListener("loadeddata", markReady, { once: true });
-    return () => video.removeEventListener("loadeddata", markReady);
+    video.addEventListener("loadedmetadata", markReady, { once: true });
+    // Some mobile browsers wait for an explicit load() call before they
+    // start fetching anything at all, even with preload="auto" present.
+    video.load();
+    return () => video.removeEventListener("loadedmetadata", markReady);
   }, []);
 
   return (
@@ -69,6 +92,9 @@ export function VideoScrollProvider({ children }) {
           src={VIDEO_SRC}
           muted
           playsInline
+          // eslint-disable-next-line react/no-unknown-property -- legacy
+          // attribute some older iOS/Android WebViews still check directly.
+          webkit-playsinline="true"
           preload="auto"
           className="absolute inset-0 h-full w-full object-cover opacity-80"
         />
@@ -126,26 +152,68 @@ export function useVideoJourney(phases) {
     const lastEl = phases[phases.length - 1]?.ref?.current;
     if (!firstEl || !lastEl) return undefined;
 
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-
-    if (reduceMotion) {
-      video.currentTime = 0;
-      return undefined;
-    }
-
     // Pixel offsets of the very start and very end of the journey,
     // remeasured whenever ScrollTrigger recalculates (initial load, window
     // resize, content reflow) so the mapping stays accurate at any
     // viewport size regardless of how tall any section in between is.
     let startY = 0;
     let endY = 0;
+    const isMobileVideo = needsMobileDecoderPump();
+    let mobileUnlocked = !isMobileVideo;
+    let unlockStarted = false;
+    let desiredTime = 0;
+    let seekInFlight = false;
+    let nativeFrameId;
     const measure = () => {
       const firstRect = firstEl.getBoundingClientRect();
       const lastRect = lastEl.getBoundingClientRect();
       startY = firstRect.top + window.scrollY;
       endY = lastRect.bottom + window.scrollY;
+    };
+
+    const applyMobileSeek = () => {
+      if (
+        !mobileUnlocked ||
+        seekInFlight ||
+        !Number.isFinite(video.duration)
+      ) {
+        return;
+      }
+
+      // WebKit cancels or starves repeated seeks when currentTime is
+      // reassigned before the previous seek has completed. Keep at most one
+      // seek in flight; `handleSeeked` below immediately applies the newest
+      // scroll-derived target, discarding obsolete intermediate positions.
+      if (Math.abs(video.currentTime - desiredTime) < 1 / 48) return;
+      seekInFlight = true;
+      video.pause();
+      try {
+        video.currentTime = desiredTime;
+      } catch (error) {
+        seekInFlight = false;
+        console.warn("No se pudo actualizar el frame del video.", error);
+      }
+    };
+
+    const handleSeeked = () => {
+      seekInFlight = false;
+      applyMobileSeek();
+    };
+
+    const updateVideoFromScroll = (scrollY = window.scrollY) => {
+      if (endY <= startY) measure();
+      if (!Number.isFinite(video.duration)) return;
+      const progress =
+        endY > startY
+          ? gsap.utils.clamp(0, 1, (scrollY - startY) / (endY - startY))
+          : 0;
+      desiredTime = progress * video.duration;
+
+      if (isMobileVideo) {
+        applyMobileSeek();
+      } else {
+        video.currentTime = desiredTime;
+      }
     };
 
     const trigger = ScrollTrigger.create({
@@ -157,19 +225,79 @@ export function useVideoJourney(phases) {
       onRefresh: measure,
       onUpdate: (self) => {
         if (endY <= startY) measure();
-        const scrollY = self.scroll();
-        const progress =
-          endY > startY
-            ? gsap.utils.clamp(0, 1, (scrollY - startY) / (endY - startY))
-            : 0;
-        video.currentTime = progress * video.duration;
+        // On mobile, metadata can technically fire with a momentarily
+        // unreliable duration on some Android WebViews; skip the seek
+        // rather than assigning currentTime = NaN, which throws and would
+        // permanently kill this trigger's updates.
+        if (!isMobileVideo) updateVideoFromScroll(self.scroll());
       },
     });
 
     measure();
     video.currentTime = 0;
+    updateVideoFromScroll();
 
-    return () => trigger.kill();
+    const handleNativeScroll = () => {
+      if (nativeFrameId) return;
+      nativeFrameId = window.requestAnimationFrame(() => {
+        nativeFrameId = undefined;
+        updateVideoFromScroll();
+      });
+    };
+    const unlockOnTouch = () => {
+      if (mobileUnlocked || unlockStarted) return;
+      unlockStarted = true;
+
+      // Mobile Safari requires one real user-initiated play before it will
+      // decode frames requested through currentTime. This play lasts only
+      // until the first animation frame; afterward the video remains
+      // paused and its time is controlled exclusively by page scroll.
+      const finishUnlock = () => {
+        window.requestAnimationFrame(() => {
+          video.pause();
+          mobileUnlocked = true;
+          seekInFlight = false;
+          updateVideoFromScroll();
+        });
+      };
+      const unlock = video.play();
+      if (unlock && typeof unlock.then === "function") {
+        unlock.then(finishUnlock).catch((error) => {
+          video.pause();
+          mobileUnlocked = true;
+          seekInFlight = false;
+          console.warn(
+            "WebKit rechazó el desbloqueo del video; se usará seek pausado.",
+            error
+          );
+          updateVideoFromScroll();
+        });
+      } else {
+        finishUnlock();
+      }
+    };
+    if (isMobileVideo) {
+      video.addEventListener("seeked", handleSeeked);
+      window.addEventListener("scroll", handleNativeScroll, { passive: true });
+      window.addEventListener("touchstart", unlockOnTouch, { passive: true });
+      window.addEventListener("touchmove", handleNativeScroll, {
+        passive: true,
+      });
+      window.addEventListener("pointerdown", unlockOnTouch, { passive: true });
+    }
+
+    return () => {
+      if (isMobileVideo) {
+        video.removeEventListener("seeked", handleSeeked);
+        window.removeEventListener("scroll", handleNativeScroll);
+        window.removeEventListener("touchstart", unlockOnTouch);
+        window.removeEventListener("touchmove", handleNativeScroll);
+        window.removeEventListener("pointerdown", unlockOnTouch);
+      }
+      if (nativeFrameId) window.cancelAnimationFrame(nativeFrameId);
+      video.pause();
+      trigger.kill();
+    };
   }, [context, phases]);
 }
 
