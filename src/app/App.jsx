@@ -1,20 +1,18 @@
-import { SmoothScrollProvider } from "./providers/useSmoothScroll";
-import { VideoScrollProvider } from "./providers/VideoScrollBackground";
-import { LandingPage } from "@/modules/landing";
+import { RouterProvider } from "react-router-dom";
+import { ApolloProvider } from "@apollo/client/react";
+import { apolloClient } from "@/infrastructure/graphql/apolloClient";
+import { router } from "./router/routes";
 
 /**
- * Composition root: wires the app-wide scroll/video providers around
- * whichever top-level module is active. Today that's always the landing
- * page (there's no router yet), but this is the seam where future
- * route-based module switching (auth / client / admin / coach) will land.
+ * Composition root: Apollo client + router.
+ * The landing scroll/video providers are scoped inside LandingLayout
+ * so they only run on the "/" route.
  */
 function App() {
   return (
-    <SmoothScrollProvider>
-      <VideoScrollProvider>
-        <LandingPage />
-      </VideoScrollProvider>
-    </SmoothScrollProvider>
+    <ApolloProvider client={apolloClient}>
+      <RouterProvider router={router} />
+    </ApolloProvider>
   );
 }
 
